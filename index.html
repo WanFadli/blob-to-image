@@ -14,6 +14,7 @@
     --muted: #64748b;
     --accent: #2563eb;
     --accent-dark: #1d4ed8;
+    --accent-bg: #eff6ff;
     --ok: #059669;
     --ok-bg: #ecfdf5;
     --warn: #d97706;
@@ -125,6 +126,13 @@
     font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
     max-height: 280px; overflow: auto; white-space: pre-wrap;
     word-break: break-word; margin: 0;
+  }
+  .magic-highlight {
+    background: var(--accent); color: white; font-weight: 600; border-radius: 2px; padding: 0 2px;
+  }
+  .magic-label {
+    display: inline-block; background: var(--accent); color: white; font-size: 10px;
+    padding: 2px 6px; border-radius: 3px; margin: 0 4px; font-weight: 600;
   }
 
   .section-title {
@@ -259,9 +267,10 @@
         <div id="details-rows"></div>
 
         <div class="row-divider">
-          <div class="section-title">First 32 bytes (hex)
-            <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">The very first 32 bytes shown as hex. Most file types start with a unique "magic number" here that identifies them — like a fingerprint at the start of the file.</span></span>
+          <div class="section-title">First 32 bytes (hex representation)
+            <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">The very first 32 bytes shown as hexadecimal. Most file types start with a unique "magic number" here that identifies them — like a fingerprint. Each pair of hex digits (e.g., "FF") = one byte.</span></span>
           </div>
+          <p class="hint">These are the same bytes as in the decoded image data below, just shown in hexadecimal format instead of decimal.</p>
           <pre class="hex" id="hex-dump"></pre>
         </div>
 
@@ -282,6 +291,80 @@
         <div id="decoding-alert"></div>
         <div id="detection-rows"></div>
         <div id="detection-extra"></div>
+      </div>
+
+      <!-- 3b. Conversion Pipeline (for pasted content) -->
+      <div class="card" id="conversion-card" hidden>
+        <h2>3b. Conversion Pipeline
+          <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">Shows the intermediate steps when decoding base64 or hex to image bytes. Each step transforms the data into a different format while keeping the same information.</span></span>
+        </h2>
+
+        <div style="background: var(--accent-bg); border: 1px solid var(--accent); border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+          <div style="font-size: 11px; color: var(--accent-dark); font-weight: 600; margin-bottom: 6px;">ℹ️ FLOW OVERVIEW</div>
+          <div style="font-size: 12px; color: var(--accent-dark); line-height: 1.6;">
+            <strong>Your clipboard</strong> (pasted text) → <strong>Decode</strong> (base64 to bytes) → <strong>Binary representation</strong> → <strong>Uint8Array</strong> (computer-friendly) → <strong>Magic bytes</strong> (format detection) → <strong>Image display</strong>
+          </div>
+        </div>
+
+        <div class="row-divider">
+          <div class="section-title">Step 0: Original Pasted Input
+            <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">This is what you copied and pasted from somewhere. It's text that represents binary data in a compact form (base64 is like a "text encoding" of the actual bytes).</span></span>
+          </div>
+          <p class="hint"><strong>Source:</strong> Your clipboard · <strong>Format:</strong> Text encoding (base64, hex, or data: URL) · <strong>Contains:</strong> Compressed representation of image bytes</p>
+          <pre class="hex" id="pipeline-input" style="max-height: 120px;"></pre>
+          <p class="hint" style="margin-top: 8px; color: var(--ok); font-weight: 500;">✓ This text gets converted to actual binary data in the next steps</p>
+        </div>
+
+        <div class="row-divider">
+          <div class="section-title">Step 1: Binary String (atob() decoder output)
+            <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">JavaScript's atob() function decodes base64 text into a raw binary string. Each character in this string represents one byte (0-255). Most bytes are unprintable, shown as "."</span></span>
+          </div>
+          <p class="hint"><strong>What happens:</strong> base64 characters (A-Z, a-z, 0-9, +/, =) → each group of 4 chars = 3 bytes. Unprintable bytes shown as dots.</p>
+          <p class="hint"><strong>Example:</strong> "iVBO" in base64 → becomes the bytes that show as "..." in this view</p>
+          <pre class="pre" id="pipeline-binary" style="max-height: 120px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px;"></pre>
+          <p class="hint" style="margin-top: 8px; background: var(--ok-bg); padding: 8px; border-radius: 4px; border-left: 3px solid var(--ok);">📝 This is intermediate form. Browser can't work with strings directly — need to convert to Uint8Array next.</p>
+        </div>
+
+        <div class="row-divider">
+          <div class="section-title">Step 2: Uint8Array (byte array — computer format)
+            <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">Each binary character converted to a number (0-255). This is the format the browser actually works with for processing images.</span></span>
+          </div>
+          <p class="hint"><strong>What happens:</strong> Each character from the binary string → converted to its numeric value (0-255)</p>
+          <p class="hint"><strong>Same data, different view:</strong></p>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 11px; margin: 8px 0;">
+            <div style="background: var(--slate-50); padding: 8px; border-radius: 4px;">
+              <strong style="color: var(--text);">Decimal (shown here)</strong><br/>
+              255, 216, 255 = bytes as numbers
+            </div>
+            <div style="background: var(--slate-50); padding: 8px; border-radius: 4px;">
+              <strong style="color: var(--text);">Hexadecimal (in File Details)</strong><br/>
+              FF D8 FF = same bytes as hex
+            </div>
+          </div>
+          <pre class="pre" id="pipeline-uint8" style="max-height: 120px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; white-space: normal; word-break: break-all;"></pre>
+          <p class="hint" style="margin-top: 8px; color: var(--ok); font-weight: 500;">✓ Now the data is in the format browsers need. Next: identify which bytes are the format signature.</p>
+        </div>
+
+        <div class="row-divider">
+          <div class="section-title">Step 3: Magic Bytes (Format Detection)
+            <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">The first 4-12 bytes at the start of every image file are a unique signature. They're called "magic bytes" because they magically tell you what format the image is — like a fingerprint.</span></span>
+          </div>
+          <p class="hint"><strong>Why:</strong> File extensions (.png, .jpg) can lie. Magic bytes never do. The format is determined by the actual bytes at the start of the file.</p>
+          <p class="hint"><strong>Examples of magic bytes:</strong></p>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; font-size: 11px; margin: 8px 0;">
+            <div style="background: #ffe5e5; padding: 8px; border-radius: 4px; border-left: 3px solid #dc2626;">
+              <strong>PNG:</strong> 89 50 4E 47<br/>(137, 80, 78, 71)
+            </div>
+            <div style="background: #e5f3ff; padding: 8px; border-radius: 4px; border-left: 3px solid #2563eb;">
+              <strong>JPEG:</strong> FF D8 FF<br/>(255, 216, 255)
+            </div>
+            <div style="background: #e5ffe5; padding: 8px; border-radius: 4px; border-left: 3px solid #059669;">
+              <strong>GIF:</strong> 47 49 46 38<br/>(71, 73, 70, 56)
+            </div>
+          </div>
+          <div id="pipeline-magic"></div>
+          <p class="hint" style="margin-top: 12px; background: var(--accent-bg); padding: 8px; border-radius: 4px; border-left: 3px solid var(--accent);">✓ Once we identify the magic bytes, we know exactly what format the image is and how to display it.</p>
+        </div>
       </div>
 
       <!-- 4. Encryption -->
@@ -374,28 +457,35 @@ const UNKNOWN = { mime: "application/octet-stream", ext: "bin", label: "Unknown"
 
 function detectFormat(b) {
   if (b.length >= 4 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) {
+    state.magicBytesInfo = { bytes: "89 50 4E 47", decimal: [137, 80, 78, 71], meaning: "PNG signature" };
     return { mime: "image/png", ext: "png", label: "PNG" };
   }
   if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) {
+    state.magicBytesInfo = { bytes: "FF D8 FF", decimal: [255, 216, 255], meaning: "JPEG signature (SOI marker)" };
     return { mime: "image/jpeg", ext: "jpg", label: "JPEG" };
   }
   if (b.length >= 6 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) {
+    state.magicBytesInfo = { bytes: "47 49 46 38", decimal: [71, 73, 70, 56], meaning: "GIF signature (GIF87a or GIF89a)" };
     return { mime: "image/gif", ext: "gif", label: "GIF" };
   }
   if (b.length >= 12 &&
       b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
       b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) {
+    state.magicBytesInfo = { bytes: "52 49 46 46 ... 57 45 42 50", decimal: "RIFF at [0-3], WEBP at [8-11]", meaning: "WebP signature (RIFF container)" };
     return { mime: "image/webp", ext: "webp", label: "WebP" };
   }
   if (b.length >= 2 && b[0] === 0x42 && b[1] === 0x4d) {
+    state.magicBytesInfo = { bytes: "42 4D", decimal: [66, 77], meaning: "BMP signature ('BM')" };
     return { mime: "image/bmp", ext: "bmp", label: "BMP" };
   }
   if (b.length >= 4 &&
       ((b[0] === 0x49 && b[1] === 0x49 && b[2] === 0x2a && b[3] === 0x00) ||
        (b[0] === 0x4d && b[1] === 0x4d && b[2] === 0x00 && b[3] === 0x2a))) {
+    state.magicBytesInfo = { bytes: "49 49 2A 00 or 4D 4D 00 2A", decimal: "Little-endian or Big-endian", meaning: "TIFF signature" };
     return { mime: "image/tiff", ext: "tif", label: "TIFF" };
   }
   if (b.length >= 4 && b[0] === 0x00 && b[1] === 0x00 && b[2] === 0x01 && b[3] === 0x00) {
+    state.magicBytesInfo = { bytes: "00 00 01 00", decimal: [0, 0, 1, 0], meaning: "ICO signature" };
     return { mime: "image/x-icon", ext: "ico", label: "ICO" };
   }
   if (b.length >= 12) {
@@ -403,16 +493,20 @@ function detectFormat(b) {
     if (ftyp === "ftyp") {
       const brand = String.fromCharCode(b[8], b[9], b[10], b[11]);
       if (["heic", "heix", "heim", "heis", "mif1", "msf1", "hevc", "hevx"].includes(brand)) {
+        state.magicBytesInfo = { bytes: "... 66 74 79 70 ...", decimal: "ftyp at [4-7]", meaning: "ISO BMFF container (HEIC)" };
         return { mime: "image/heic", ext: "heic", label: "HEIC (" + brand + ")" };
       }
       if (brand === "avif" || brand === "avis") {
+        state.magicBytesInfo = { bytes: "... 66 74 79 70 ...", decimal: "ftyp at [4-7]", meaning: "ISO BMFF container (AVIF)" };
         return { mime: "image/avif", ext: "avif", label: "AVIF (" + brand + ")" };
       }
+      state.magicBytesInfo = { bytes: "... 66 74 79 70 ...", decimal: "ftyp at [4-7]", meaning: "ISO BMFF container (" + brand + ")" };
       return { mime: "video/mp4", ext: "mp4", label: "ISO BMFF (" + brand + ")" };
     }
   }
   const head = new TextDecoder("utf-8", { fatal: false }).decode(b.slice(0, 300)).trim();
   if (head.startsWith("<?xml") || head.toLowerCase().startsWith("<svg")) {
+    state.magicBytesInfo = { bytes: "3C 3F 78 6D 6C or 3C 73 76 67", decimal: "'<?xml' or '<svg'", meaning: "SVG/XML text signature" };
     return { mime: "image/svg+xml", ext: "svg", label: "SVG" };
   }
   return UNKNOWN;
@@ -422,6 +516,8 @@ function base64ToBytes(b64) {
   const bin = atob(b64);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  // Store binary string for pipeline visualization
+  state.binaryString = bin;
   return out;
 }
 function hexToBytes(hex) {
@@ -739,6 +835,8 @@ const state = {
   blobUrl: null,
   imgInfo: null,
   imgError: null,
+  binaryString: null, // intermediate: result from atob()
+  magicBytesInfo: null, // info about the detected magic bytes
 };
 
 function escapeHtml(s) {
@@ -762,13 +860,14 @@ function reset() {
   if (state.blobUrl) { URL.revokeObjectURL(state.blobUrl); state.blobUrl = null; }
   state.file = null; state.orig = null; state.decoded = null;
   state.sha = null; state.enc = null; state.imgInfo = null; state.imgError = null;
+  state.binaryString = null; state.magicBytesInfo = null;
 
   document.getElementById("paste-input").value = "";
   document.getElementById("paste-btn").disabled = true;
   document.getElementById("clear-btn").hidden = true;
   document.getElementById("pick-label-text").textContent = "Upload file";
 
-  ["details-card", "detection-card", "enc-card", "dl-card", "other-card"].forEach((id) => {
+  ["details-card", "detection-card", "enc-card", "dl-card", "other-card", "conversion-card"].forEach((id) => {
     document.getElementById(id).hidden = true;
   });
 
@@ -822,9 +921,119 @@ function renderAll() {
   html += row("Last modified", new Date(file.lastModified).toLocaleString(),
               "When the file was last saved on disk, according to the operating system.");
   document.getElementById("details-rows").innerHTML = html;
-  document.getElementById("hex-dump").textContent = hexDump(orig, 32) || "(empty)";
+
+  // Highlight magic bytes in hex dump
+  let magicLength = 0;
+  if (state.magicBytesInfo) {
+    if (fmt.label === "PNG") magicLength = 4;
+    else if (fmt.label === "JPEG") magicLength = 3;
+    else if (fmt.label === "GIF") magicLength = 4;
+    else if (fmt.label === "BMP") magicLength = 2;
+    else if (fmt.label === "ICO") magicLength = 4;
+    else if (fmt.label.startsWith("HEIC") || fmt.label.startsWith("AVIF")) magicLength = 12;
+    else magicLength = 4;
+  }
+
+  let hexHtml = "";
+  const hexParts = hexDump(orig, 32).split(" ");
+  for (let i = 0; i < hexParts.length; i++) {
+    if (i < magicLength && magicLength > 0) {
+      hexHtml += '<span class="magic-highlight">' + escapeHtml(hexParts[i]) + '</span> ';
+    } else {
+      hexHtml += escapeHtml(hexParts[i]) + ' ';
+    }
+  }
+  if (magicLength > 0) {
+    hexHtml += '<br/><span style="font-size: 10px; color: var(--accent); font-weight: 600; margin-top: 4px; display: inline-block;">↑ Magic bytes (position 0-' + (magicLength - 1) + ')</span>';
+  }
+  document.getElementById("hex-dump").innerHTML = hexHtml || "(empty)";
   document.getElementById("sha-block").hidden = false;
   document.getElementById("sha-dump").textContent = state.sha;
+
+  // 3b. Conversion Pipeline (only show for pasted/decoded content)
+  if (decoded.decoding !== "binary") {
+    document.getElementById("conversion-card").hidden = false;
+
+    // Original input
+    const inputPreview = decoded.decoding === "base64" ? "base64 string" : decoded.decoding === "hex" ? "hex string" : "data: URL";
+    document.getElementById("pipeline-input").textContent = inputPreview + " (truncated)\n" +
+      (decoded.decoding === "base64" ? "iVBORw0KGgoAAAANSUhEUgAA..." :
+       decoded.decoding === "hex" ? "89 50 4E 47 0D 0A 1A 0A ..." :
+       "data:image/png;base64,iVBORw0KGgo...");
+
+    // Determine magic byte positions (always at start)
+    let magicStart = 0;
+    let magicLength = 0;
+    if (state.magicBytesInfo) {
+      if (fmt.label === "PNG") magicLength = 4;
+      else if (fmt.label === "JPEG") magicLength = 3;
+      else if (fmt.label === "GIF") magicLength = 4;
+      else if (fmt.label === "BMP") magicLength = 2;
+      else if (fmt.label === "ICO") magicLength = 4;
+      else if (fmt.label.startsWith("HEIC") || fmt.label.startsWith("AVIF")) magicLength = 12;
+      else magicLength = 4;
+    }
+
+    // Binary string view with highlighting
+    if (state.binaryString) {
+      let binHtml = '<span style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.6;">';
+      const displayLen = Math.min(200, state.binaryString.length);
+      for (let i = 0; i < displayLen; i++) {
+        const c = state.binaryString.charCodeAt(i);
+        const char = (c >= 32 && c < 127) ? state.binaryString[i] : ".";
+        if (i >= magicStart && i < magicStart + magicLength) {
+          binHtml += '<span class="magic-highlight">' + escapeHtml(char) + '</span>';
+        } else {
+          binHtml += escapeHtml(char);
+        }
+      }
+      if (state.binaryString.length > 200) binHtml += "...";
+      binHtml += '</span>';
+      if (magicLength > 0) {
+        binHtml += '<div style="margin-top: 8px; padding: 8px; background: var(--accent-bg, #eff6ff); border-radius: 4px; font-size: 11px; color: var(--accent-dark);"><strong>Position:</strong> bytes 0-' + (magicLength - 1) + ' contain magic signature</div>';
+      }
+      document.getElementById("pipeline-binary").innerHTML = binHtml;
+    }
+
+    // Uint8Array view with highlighting
+    let uint8Html = '<span style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.8;">';
+    let byteCount = 0;
+    for (let i = 0; i < Math.min(64, decoded.bytes.length); i++) {
+      const val = decoded.bytes[i].toString().padStart(3, " ");
+      if (i >= magicStart && i < magicStart + magicLength) {
+        uint8Html += '<span class="magic-highlight">' + escapeHtml(val) + '</span>';
+      } else {
+        uint8Html += escapeHtml(val);
+      }
+      if ((i + 1) % 16 === 0) uint8Html += "\n";
+      else uint8Html += " ";
+      byteCount++;
+    }
+    if (decoded.bytes.length > 64) uint8Html += "...";
+    uint8Html += '</span>';
+    if (magicLength > 0) {
+      uint8Html += '<div style="margin-top: 8px; padding: 8px; background: var(--accent-bg, #eff6ff); border-radius: 4px; font-size: 11px; color: var(--accent-dark);"><strong>Highlighted:</strong> bytes 0-' + (magicLength - 1) + ' (magic signature)</div>';
+    }
+    document.getElementById("pipeline-uint8").innerHTML = uint8Html;
+
+    // Magic bytes with detailed info
+    let magicHtml = "";
+    if (state.magicBytesInfo) {
+      magicHtml += '<div style="margin-bottom: 12px;">';
+      magicHtml += row("Position in file", 'Bytes 0–' + (magicLength - 1) + ' (start of file)', 'Magic signatures are always at the beginning. These first ' + magicLength + ' byte(s) uniquely identify the format.');
+      magicHtml += row("Hex signature", '<span class="mono">' + state.magicBytesInfo.bytes + '</span>', 'Shown in hexadecimal notation');
+      if (typeof state.magicBytesInfo.decimal === "object") {
+        magicHtml += row("Decimal values", escapeHtml(state.magicBytesInfo.decimal.map(b => b.toString()).join(", ")), 'Same bytes shown as decimal (0-255)');
+      } else {
+        magicHtml += row("Details", state.magicBytesInfo.decimal);
+      }
+      magicHtml += row("Meaning", '<span style="color: var(--ok); font-weight: 600;">✓ ' + state.magicBytesInfo.meaning + '</span>', 'What this signature tells us');
+      magicHtml += '</div>';
+    }
+    document.getElementById("pipeline-magic").innerHTML = magicHtml;
+  } else {
+    document.getElementById("conversion-card").hidden = true;
+  }
 
   // 3. Detection
   document.getElementById("detection-card").hidden = false;
