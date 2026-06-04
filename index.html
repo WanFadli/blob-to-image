@@ -134,6 +134,33 @@
     display: inline-block; background: var(--accent); color: white; font-size: 10px;
     padding: 2px 6px; border-radius: 3px; margin: 0 4px; font-weight: 600;
   }
+  .data-map {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 12px 0;
+  }
+  .data-map-item {
+    background: var(--slate-50); padding: 12px; border-radius: 6px; border-left: 3px solid var(--accent);
+  }
+  .data-map-label {
+    font-weight: 600; color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+  }
+  .data-map-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; color: var(--text); margin-bottom: 4px;
+  }
+  .data-map-meaning {
+    font-size: 12px; color: var(--muted); line-height: 1.4;
+  }
+  .file-structure {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; line-height: 1.8;
+    background: var(--slate-50); padding: 12px; border-radius: 6px; overflow-x: auto;
+  }
+  .structure-row {
+    display: grid; grid-template-columns: 80px 100px 150px 1fr; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border);
+  }
+  .structure-row:last-child { border-bottom: 0; }
+  .structure-label { color: var(--accent); font-weight: 600; }
+  .structure-data { color: var(--text); font-weight: 500; }
+  .structure-meaning { color: var(--muted); }
+  .highlight-bytes { background: var(--accent); color: white; padding: 2px 4px; border-radius: 2px; font-weight: 600; }
 
   .section-title {
     font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
@@ -263,14 +290,16 @@
 
       <!-- 2. Details -->
       <div class="card" id="details-card" hidden>
-        <h2>2. File &amp; blob details</h2>
+        <h2>2. File &amp; blob details: What we know about your file</h2>
+        <p class="hint" style="background: #e5f3ff; padding: 8px; border-radius: 4px; margin-bottom: 12px; border-left: 3px solid #2563eb;">ℹ️ <strong>Basic info:</strong> Size, filename, when it was last saved, and what format it is.</p>
         <div id="details-rows"></div>
 
         <div class="row-divider">
-          <div class="section-title">First 32 bytes (hex representation)
+          <div class="section-title">First 32 bytes (the fingerprint, shown as hex)
             <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">The very first 32 bytes shown as hexadecimal. Most file types start with a unique "magic number" here that identifies them — like a fingerprint. Each pair of hex digits (e.g., "FF") = one byte.</span></span>
           </div>
-          <p class="hint">These are the same bytes as in the decoded image data below, just shown in hexadecimal format instead of decimal.</p>
+          <p class="hint" style="background: #fff8dc; padding: 8px; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #fbbf24;"><strong>In simple terms:</strong> This is the "secret fingerprint" at the very start of the file. The blue highlighted numbers are the ones that tell us what type of picture this is.</p>
+          <p class="hint"><strong>Note:</strong> These are the same numbers as shown in Step 2 above, just in a different number system (hex is a shorthand way of writing numbers).</p>
           <pre class="hex" id="hex-dump"></pre>
         </div>
 
@@ -285,9 +314,10 @@
 
       <!-- 3. Detection -->
       <div class="card" id="detection-card" hidden>
-        <h2>3. Detection
-          <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">What we figured out about the blob: what kind of file it is, and (if applicable) what text encoding it was wrapped in.</span></span>
+        <h2>3. Detection: What type of picture is this?
+          <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">This section shows what we figured out about your file: what kind of picture it is, and how it was delivered to us (text code, hex code, etc).</span></span>
         </h2>
+        <p class="hint" style="background: #e5f3ff; padding: 8px; border-radius: 4px; margin-bottom: 12px; border-left: 3px solid #2563eb;">📋 <strong>Results:</strong> Here's what we discovered about your picture file by examining the secret fingerprint at the start.</p>
         <div id="decoding-alert"></div>
         <div id="detection-rows"></div>
         <div id="detection-extra"></div>
@@ -300,9 +330,12 @@
         </h2>
 
         <div style="background: var(--accent-bg); border: 1px solid var(--accent); border-radius: 6px; padding: 12px; margin-bottom: 16px;">
-          <div style="font-size: 11px; color: var(--accent-dark); font-weight: 600; margin-bottom: 6px;">ℹ️ FLOW OVERVIEW</div>
-          <div style="font-size: 12px; color: var(--accent-dark); line-height: 1.6;">
-            <strong>Your clipboard</strong> (pasted text) → <strong>Decode</strong> (base64 to bytes) → <strong>Binary representation</strong> → <strong>Uint8Array</strong> (computer-friendly) → <strong>Magic bytes</strong> (format detection) → <strong>Image display</strong>
+          <div style="font-size: 11px; color: var(--accent-dark); font-weight: 600; margin-bottom: 6px;">🚀 THE JOURNEY (step-by-step)</div>
+          <div style="font-size: 12px; color: var(--accent-dark); line-height: 1.8;">
+            You paste text → We translate it (decode) → We convert to numbers → We look at the fingerprint → Browser shows the picture
+          </div>
+          <div style="font-size: 11px; color: var(--accent-dark); margin-top: 6px; font-style: italic;">
+            (Each step below explains what happens in that conversion)
           </div>
         </div>
 
@@ -310,6 +343,7 @@
           <div class="section-title">Step 0: Original Pasted Input
             <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">This is the exact text you copied and pasted. It's text that represents binary data in a compact form (base64 is like a "text encoding" of the actual bytes).</span></span>
           </div>
+          <p class="hint" style="background: #fff8dc; padding: 8px; border-radius: 4px; margin-bottom: 12px; border-left: 3px solid #fbbf24;"><strong>In simple terms:</strong> You copied some text (looks like random characters). This text is a CODE that contains the picture data, just packed into text form so it's easy to share.</p>
           <div id="pipeline-input-info" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px; font-size: 11px;">
             <!-- Populated by JavaScript -->
           </div>
@@ -328,54 +362,79 @@
         </div>
 
         <div class="row-divider">
-          <div class="section-title">Step 1: Binary String (atob() decoder output)
+          <div class="section-title">Step 1: Binary String (First decoding step)
             <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">JavaScript's atob() function decodes base64 text into a raw binary string. Each character in this string represents one byte (0-255). Most bytes are unprintable, shown as "."</span></span>
           </div>
-          <p class="hint"><strong>What happens:</strong> base64 characters (A-Z, a-z, 0-9, +/, =) → each group of 4 chars = 3 bytes. Unprintable bytes shown as dots.</p>
-          <p class="hint"><strong>Example:</strong> "iVBO" in base64 → becomes the bytes that show as "..." in this view</p>
+          <p class="hint" style="background: #fff8dc; padding: 8px; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #fbbf24;"><strong>In simple terms:</strong> We took that text code and "translated" it. Now we have the raw picture data, but in a form that's still kind of text-like. The dots (.) are characters that can't be shown as normal text.</p>
+          <p class="hint"><strong>Technical details:</strong> atob() converts base64 characters (A-Z, a-z, 0-9, +/, =) → each group of 4 chars becomes 3 bytes of real data</p>
+          <p class="hint"><strong>Quick example:</strong> "iVBO" in base64 → becomes the secret bytes that show as "..." here</p>
           <pre class="pre" id="pipeline-binary" style="max-height: 120px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px;"></pre>
-          <p class="hint" style="margin-top: 8px; background: var(--ok-bg); padding: 8px; border-radius: 4px; border-left: 3px solid var(--ok);">📝 This is intermediate form. Browser can't work with strings directly — need to convert to Uint8Array next.</p>
+          <p class="hint" style="margin-top: 8px; background: var(--ok-bg); padding: 8px; border-radius: 4px; border-left: 3px solid var(--ok);">⚠️ Note: This is still not ready for the browser. We need one more step to make it usable.</p>
         </div>
 
         <div class="row-divider">
-          <div class="section-title">Step 2: Uint8Array (byte array — computer format)
+          <div class="section-title">Step 2: Uint8Array (Convert to numbers the browser understands)
             <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">Each binary character converted to a number (0-255). This is the format the browser actually works with for processing images.</span></span>
           </div>
-          <p class="hint"><strong>What happens:</strong> Each character from the binary string → converted to its numeric value (0-255)</p>
-          <p class="hint"><strong>Same data, different view:</strong></p>
+          <p class="hint" style="background: #fff8dc; padding: 8px; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #fbbf24;"><strong>In simple terms:</strong> Now we convert those text-like bytes into numbers. This is what the browser's image processor actually understands. It's like translating from one language to another.</p>
+          <p class="hint"><strong>Technical details:</strong> Each character from the binary string → converted to its numeric value (0-255). Zero = nothing, 255 = maximum.</p>
+          <p class="hint"><strong>Same picture data, shown two ways:</strong></p>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 11px; margin: 8px 0;">
             <div style="background: var(--slate-50); padding: 8px; border-radius: 4px;">
-              <strong style="color: var(--text);">Decimal (shown here)</strong><br/>
-              255, 216, 255 = bytes as numbers
+              <strong style="color: var(--text);">📊 Decimal numbers (shown here)</strong><br/>
+              255, 216, 255 = the numbers
             </div>
             <div style="background: var(--slate-50); padding: 8px; border-radius: 4px;">
-              <strong style="color: var(--text);">Hexadecimal (in File Details)</strong><br/>
-              FF D8 FF = same bytes as hex
+              <strong style="color: var(--text);">🔤 Hex shorthand (in File Details)</strong><br/>
+              FF D8 FF = fancy way to write same numbers
             </div>
           </div>
           <pre class="pre" id="pipeline-uint8" style="max-height: 120px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; white-space: normal; word-break: break-all;"></pre>
-          <p class="hint" style="margin-top: 8px; color: var(--ok); font-weight: 500;">✓ Now the data is in the format browsers need. Next: identify which bytes are the format signature.</p>
+          <p class="hint" style="margin-top: 8px; color: var(--ok); font-weight: 500;">✓ Perfect! Browser can now read this. Next step: look at the first few numbers to figure out what type of picture this is.</p>
         </div>
 
         <div class="row-divider">
-          <div class="section-title">Step 3: Magic Bytes (Format Detection)
+          <div class="section-title">Step 3a: File Structure Map (What each part does)
+            <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">This shows which exact bytes in your file are responsible for each piece of information. Hover over each section to see the data.</span></span>
+          </div>
+          <p class="hint" style="background: #fff8dc; padding: 8px; border-radius: 4px; margin-bottom: 12px; border-left: 3px solid #fbbf24;"><strong>In simple terms:</strong> Your picture file is like a document with sections. Each section (certain bytes) contains specific information. Below shows WHICH bytes contain WHAT info.</p>
+          <div class="file-structure">
+            <div class="structure-row">
+              <div class="structure-label">Bytes</div>
+              <div class="structure-label">Hex Value</div>
+              <div class="structure-label">What it is</div>
+              <div class="structure-label">What it does</div>
+            </div>
+            <div id="file-structure-rows"></div>
+          </div>
+        </div>
+
+        <div class="row-divider">
+          <div class="section-title">Step 3b: Magic Bytes (Identifying the picture type)
             <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">The first 4-12 bytes at the start of every image file are a unique signature. They're called "magic bytes" because they magically tell you what format the image is — like a fingerprint.</span></span>
           </div>
-          <p class="hint"><strong>Why:</strong> File extensions (.png, .jpg) can lie. Magic bytes never do. The format is determined by the actual bytes at the start of the file.</p>
-          <p class="hint"><strong>Examples of magic bytes:</strong></p>
+          <p class="hint" style="background: #fff8dc; padding: 8px; border-radius: 4px; margin-bottom: 8px; border-left: 3px solid #fbbf24;"><strong>In simple terms:</strong> Every picture file starts with a unique "secret code" at the very beginning. Just by looking at these first few numbers, we can tell: "Oh! This is a JPEG" or "This is a PNG" or "This is a GIF". It's like a fingerprint that never lies.</p>
+          <p class="hint"><strong>Why this matters:</strong> Someone could rename a JPEG to ".png" and try to trick you. But the magic bytes at the start always tell the truth about what type of picture it really is.</p>
+          <p class="hint"><strong>Real examples (first few numbers of each type):</strong></p>
           <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; font-size: 11px; margin: 8px 0;">
             <div style="background: #ffe5e5; padding: 8px; border-radius: 4px; border-left: 3px solid #dc2626;">
-              <strong>PNG:</strong> 89 50 4E 47<br/>(137, 80, 78, 71)
+              <strong>🖼️ PNG</strong><br/>
+              Starts with: 89 50 4E 47<br/>
+              (Numbers: 137, 80, 78, 71)
             </div>
             <div style="background: #e5f3ff; padding: 8px; border-radius: 4px; border-left: 3px solid #2563eb;">
-              <strong>JPEG:</strong> FF D8 FF<br/>(255, 216, 255)
+              <strong>📷 JPEG</strong><br/>
+              Starts with: FF D8 FF<br/>
+              (Numbers: 255, 216, 255)
             </div>
             <div style="background: #e5ffe5; padding: 8px; border-radius: 4px; border-left: 3px solid #059669;">
-              <strong>GIF:</strong> 47 49 46 38<br/>(71, 73, 70, 56)
+              <strong>🎬 GIF</strong><br/>
+              Starts with: 47 49 46 38<br/>
+              (Numbers: 71, 73, 70, 56)
             </div>
           </div>
           <div id="pipeline-magic"></div>
-          <p class="hint" style="margin-top: 12px; background: var(--accent-bg); padding: 8px; border-radius: 4px; border-left: 3px solid var(--accent);">✓ Once we identify the magic bytes, we know exactly what format the image is and how to display it.</p>
+          <p class="hint" style="margin-top: 12px; background: var(--accent-bg); padding: 8px; border-radius: 4px; border-left: 3px solid var(--accent);">✅ <strong>Done!</strong> We found the fingerprint. The computer now knows exactly what type of picture this is and can display it correctly.</p>
         </div>
       </div>
 
@@ -383,9 +442,10 @@
       <div class="card" id="enc-card" hidden>
         <h2>
           <svg class="ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          4. Encryption check
-          <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">Checks the bytes against known encrypted-file signatures (OpenSSL, PGP, AES Crypt, encrypted PDF/ZIP, etc.) AND measures how random they look. Encrypted and well-compressed data both look near-random — this section explains how we tell.</span></span>
+          4. Is this file scrambled or encrypted?
+          <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">Checks if the file is locked/encrypted OR just looks scrambled because it's compressed. We look for known encryption signatures and measure how random the data looks.</span></span>
         </h2>
+        <p class="hint" style="background: #e5f3ff; padding: 8px; border-radius: 4px; margin-bottom: 12px; border-left: 3px solid #2563eb;"><strong>In simple terms:</strong> We check: "Is this file locked with a password?" OR "Is this just normal compressed image data?" Both look scrambled, but they're different things.</p>
         <div id="enc-head" style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;"></div>
         <p id="enc-reason" class="hint" style="margin-bottom:12px;"></p>
         <div class="entropy-wrap">
@@ -398,7 +458,8 @@
 
       <!-- 5. Downloads -->
       <div class="card" id="dl-card" hidden>
-        <h2>5. Download</h2>
+        <h2>5. Download your picture</h2>
+        <p class="hint" style="background: #e5f3ff; padding: 8px; border-radius: 4px; margin-bottom: 12px; border-left: 3px solid #2563eb;">✅ <strong>Success!</strong> We decoded your picture. Now you can download it in different formats.</p>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <button class="btn btn-secondary" id="dl-original">
             <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -1048,6 +1109,119 @@ function renderAll() {
     }
     document.getElementById("pipeline-uint8").innerHTML = uint8Html;
 
+    // File structure map
+    let structureHtml = "";
+    if (fmt.label === "PNG") {
+      structureHtml = `
+        <div class="structure-row">
+          <div class="structure-data">0-3</div>
+          <div class="structure-data">89 50 4E 47</div>
+          <div class="structure-meaning"><span class="highlight-bytes">PNG signature</span></div>
+          <div class="structure-meaning">Tells us this is a PNG file</div>
+        </div>
+        <div class="structure-row">
+          <div class="structure-data">4-7</div>
+          <div class="structure-data">00 00 00 0D</div>
+          <div class="structure-meaning"><span class="highlight-bytes">Chunk length</span></div>
+          <div class="structure-meaning">Size of the first data chunk (13 bytes)</div>
+        </div>
+        <div class="structure-row">
+          <div class="structure-data">8-11</div>
+          <div class="structure-data">49 48 44 52</div>
+          <div class="structure-meaning"><span class="highlight-bytes">Chunk type</span></div>
+          <div class="structure-meaning">"IHDR" - contains image width & height</div>
+        </div>
+        <div class="structure-row">
+          <div class="structure-data">12-15</div>
+          <div class="structure-data">(4 bytes)</div>
+          <div class="structure-meaning"><span class="highlight-bytes">Image width</span></div>
+          <div class="structure-meaning">How many pixels wide is this picture</div>
+        </div>
+        <div class="structure-row">
+          <div class="structure-data">16-19</div>
+          <div class="structure-data">(4 bytes)</div>
+          <div class="structure-meaning"><span class="highlight-bytes">Image height</span></div>
+          <div class="structure-meaning">How many pixels tall is this picture</div>
+        </div>
+      `;
+    } else if (fmt.label === "JPEG") {
+      structureHtml = `
+        <div class="structure-row">
+          <div class="structure-data">0-2</div>
+          <div class="structure-data">FF D8 FF</div>
+          <div class="structure-meaning"><span class="highlight-bytes">JPEG signature</span></div>
+          <div class="structure-meaning">Tells us this is a JPEG file</div>
+        </div>
+        <div class="structure-row">
+          <div class="structure-data">3</div>
+          <div class="structure-data">FF</div>
+          <div class="structure-meaning"><span class="highlight-bytes">Marker</span></div>
+          <div class="structure-meaning">Start of metadata section</div>
+        </div>
+        <div class="structure-row">
+          <div class="structure-data">4-5</div>
+          <div class="structure-data">(varies)</div>
+          <div class="structure-meaning"><span class="highlight-bytes">App segment</span></div>
+          <div class="structure-meaning">JPEG format info, quality settings</div>
+        </div>
+        <div class="structure-row">
+          <div class="structure-data">6+ (scattered)</div>
+          <div class="structure-data">FF C0</div>
+          <div class="structure-meaning"><span class="highlight-bytes">SOF marker</span></div>
+          <div class="structure-meaning">Contains image width and height</div>
+        </div>
+        <div class="structure-row">
+          <div class="structure-data">Later</div>
+          <div class="structure-data">FF DA</div>
+          <div class="structure-meaning"><span class="highlight-bytes">SOS marker</span></div>
+          <div class="structure-meaning">Actual compressed picture data starts here</div>
+        </div>
+      `;
+    } else if (fmt.label === "GIF") {
+      structureHtml = `
+        <div class="structure-row">
+          <div class="structure-data">0-5</div>
+          <div class="structure-data">47 49 46 38 39/37 61</div>
+          <div class="structure-meaning"><span class="highlight-bytes">GIF signature</span></div>
+          <div class="structure-meaning">"GIF89a" or "GIF87a" tells us format & version</div>
+        </div>
+        <div class="structure-row">
+          <div class="structure-data">6-7</div>
+          <div class="structure-data">(2 bytes)</div>
+          <div class="structure-meaning"><span class="highlight-bytes">Logical width</span></div>
+          <div class="structure-meaning">Picture width in pixels</div>
+        </div>
+        <div class="structure-row">
+          <div class="structure-data">8-9</div>
+          <div class="structure-data">(2 bytes)</div>
+          <div class="structure-meaning"><span class="highlight-bytes">Logical height</span></div>
+          <div class="structure-meaning">Picture height in pixels</div>
+        </div>
+        <div class="structure-row">
+          <div class="structure-data">10</div>
+          <div class="structure-data">(1 byte)</div>
+          <div class="structure-meaning"><span class="highlight-bytes">Flags</span></div>
+          <div class="structure-meaning">Color info & animation settings</div>
+        </div>
+        <div class="structure-row">
+          <div class="structure-data">11+</div>
+          <div class="structure-data">(varies)</div>
+          <div class="structure-meaning"><span class="highlight-bytes">Image data</span></div>
+          <div class="structure-meaning">The actual compressed picture</div>
+        </div>
+      `;
+    } else {
+      structureHtml = `
+        <div class="structure-row">
+          <div class="structure-data">0+</div>
+          <div class="structure-data">(varies)</div>
+          <div class="structure-meaning"><span class="highlight-bytes">File start</span></div>
+          <div class="structure-meaning">Different format - structure varies</div>
+        </div>
+      `;
+    }
+    document.getElementById("file-structure-rows").innerHTML = structureHtml;
+
     // Magic bytes with detailed info
     let magicHtml = "";
     if (state.magicBytesInfo) {
@@ -1116,10 +1290,11 @@ function renderAll() {
   document.getElementById("enc-entropy-label").textContent = enc.entropy.toFixed(2) + " / 8.00";
 
   let encRows = "";
-  encRows += row("Shannon entropy", enc.entropy.toFixed(3) + " / 8.000 bits/byte",
-                 "How random the bytes look, from 0 to 8. 0 = the same byte over and over (boring), 8 = perfectly random.");
-  encRows += row("Byte uniformity (χ²/N)", enc.uniformity.toFixed(2),
-                 "A statistical test for randomness. If every possible byte value appears about equally often, this is near 1 (looks random).");
+  encRows += row("Randomness score (Shannon entropy)", enc.entropy.toFixed(3) + " / 8.000",
+                 "How scrambled the data looks. 0 = boring (same numbers repeated), 8 = totally scrambled. Normal images score 7+, text scores 2-3.");
+  encRows += row("Distribution score (Byte uniformity)", enc.uniformity.toFixed(2),
+                 "Do all byte values appear roughly equally? Score near 1.0 = looks random/encrypted. Higher score = structured data.");
+  encRows += '<div style="margin-top: 12px; padding: 8px; background: #f0f9ff; border-radius: 4px; border-left: 3px solid #2563eb; font-size: 12px; line-height: 1.5;">💡 <strong>What these numbers mean:</strong> Images are compressed, so they look "random" like encrypted files. But we can tell the difference by checking for known encryption signatures above.</div>';
   document.getElementById("enc-rows").innerHTML = encRows;
 
   // 5. Download
