@@ -1,0 +1,1056 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Blob → Image</title>
+<meta name="description" content="Turn raw image bytes — or a base64 / hex / data-URL dump — back into a viewable, downloadable image. Runs entirely in the browser." />
+<style>
+  :root {
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --border: #e2e8f0;
+    --text: #0f172a;
+    --muted: #64748b;
+    --accent: #2563eb;
+    --accent-dark: #1d4ed8;
+    --ok: #059669;
+    --ok-bg: #ecfdf5;
+    --warn: #d97706;
+    --warn-bg: #fffbeb;
+    --bad: #dc2626;
+    --bad-bg: #fef2f2;
+    --slate-50: #f8fafc;
+    --slate-100: #f1f5f9;
+    --slate-200: #e2e8f0;
+    --slate-300: #cbd5e1;
+    --slate-400: #94a3b8;
+    --slate-500: #64748b;
+    --slate-600: #475569;
+    --slate-700: #334155;
+    --slate-800: #1e293b;
+    --slate-900: #0f172a;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 48px; }
+  header.page {
+    margin-bottom: 24px;
+  }
+  header.page h1 { margin: 0 0 4px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  header.page p { margin: 0; color: var(--muted); font-size: 14px; }
+
+  .grid2 { display: grid; gap: 24px; grid-template-columns: 1fr; }
+  @media (min-width: 1024px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+  .col { display: flex; flex-direction: column; gap: 24px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+  .card h2 {
+    margin: 0 0 8px; font-size: 14px; font-weight: 600; color: var(--slate-900);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card .hint { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 12px;
+    font-size: 13px; font-weight: 500;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background 120ms, border-color 120ms;
+    text-decoration: none;
+    line-height: 1;
+  }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-primary {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-dark); border-color: var(--accent-dark); }
+  .btn-secondary {
+    background: #fff; color: var(--slate-700); border-color: var(--slate-300);
+  }
+  .btn-secondary:hover:not(:disabled) { background: var(--slate-50); }
+
+  textarea, input[type="text"] {
+    width: 100%;
+    background: #fff;
+    border: 1px solid var(--slate-300);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    color: var(--text);
+    font-family: inherit;
+  }
+  textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; resize: vertical; }
+  textarea:focus, input:focus { outline: 2px solid #93c5fd; outline-offset: -1px; }
+
+  .kbd {
+    display: inline-block; padding: 1px 5px;
+    background: var(--slate-100); border: 1px solid var(--slate-200);
+    border-radius: 4px; font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--slate-700);
+  }
+
+  .row {
+    display: flex; justify-content: space-between; gap: 12px;
+    padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--slate-100);
+  }
+  .row:last-child { border-bottom: 0; }
+  .row .k { color: var(--muted); flex-shrink: 0; display: inline-flex; align-items: center; }
+  .row .v { color: var(--slate-900); text-align: right; max-width: 65%; word-break: break-word; }
+  .row .v .mono { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  .hex {
+    background: var(--slate-50); border-radius: 6px; padding: 8px 10px;
+    font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow-x: auto; word-break: break-all; margin: 0;
+    white-space: pre-wrap;
+  }
+  .pre {
+    background: var(--slate-50); border-radius: 6px; padding: 10px 12px;
+    font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+    max-height: 280px; overflow: auto; white-space: pre-wrap;
+    word-break: break-word; margin: 0;
+  }
+
+  .section-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); margin: 12px 0 4px;
+  }
+
+  .alert {
+    border-radius: 6px; padding: 10px 12px; font-size: 13px;
+    display: flex; gap: 8px; align-items: flex-start; margin-bottom: 12px;
+  }
+  .alert svg { flex-shrink: 0; margin-top: 2px; }
+  .alert.info { background: var(--ok-bg); color: #065f46; border: 1px solid #a7f3d0; }
+  .alert.warn { background: var(--warn-bg); color: #92400e; border: 1px solid #fcd34d; }
+  .alert.muted { background: var(--slate-50); color: var(--slate-700); border: 1px solid var(--slate-200); }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  }
+  .badge-red { background: #fee2e2; color: #991b1b; }
+  .badge-amber { background: #fef3c7; color: #92400e; }
+  .badge-green { background: #d1fae5; color: #065f46; }
+  .badge-slate { background: var(--slate-100); color: var(--slate-700); }
+
+  .preview-box {
+    aspect-ratio: 4 / 3;
+    background: var(--slate-50); border: 1px solid var(--border); border-radius: 6px;
+    display: grid; place-items: center;
+    color: var(--slate-400); font-size: 13px;
+  }
+  .preview-image {
+    background: var(--slate-50); border: 1px solid var(--border); border-radius: 6px;
+    overflow: hidden; display: grid; place-items: center;
+  }
+  .preview-image img { max-width: 100%; max-height: 520px; display: block; }
+
+  .entropy-wrap { margin-bottom: 12px; }
+  .entropy-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .entropy-bar { height: 8px; background: var(--slate-100); border-radius: 999px; overflow: hidden; }
+  .entropy-fill { height: 100%; transition: width 200ms ease; border-radius: 999px; }
+
+  .help {
+    position: relative; display: inline-block; margin-left: 4px; vertical-align: middle;
+  }
+  .help .dot {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px; border-radius: 999px;
+    background: var(--slate-200); color: var(--slate-600);
+    font-size: 10px; font-weight: 700; cursor: help; user-select: none;
+  }
+  .help:hover .dot { background: var(--slate-300); }
+  .help .tip {
+    visibility: hidden; opacity: 0; pointer-events: none;
+    position: absolute; z-index: 30; left: 50%; transform: translateX(-50%);
+    bottom: calc(100% + 6px);
+    width: 240px;
+    background: var(--slate-900); color: #fff;
+    padding: 8px 10px; border-radius: 6px;
+    font-size: 12px; font-weight: 400; line-height: 1.4;
+    text-align: left; box-shadow: 0 10px 20px rgba(15, 23, 42, 0.18);
+    transition: opacity 100ms;
+  }
+  .help:hover .tip, .help:focus-within .tip { visibility: visible; opacity: 1; }
+
+  .row-divider { border-top: 1px solid var(--slate-100); margin: 12px 0; padding-top: 12px; }
+
+  .stat-foot { color: var(--slate-400); font-size: 11px; margin-top: 8px; }
+
+  footer.page {
+    margin-top: 32px; padding-top: 16px;
+    border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 12px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  footer.page a { color: var(--accent); text-decoration: none; }
+  footer.page a:hover { text-decoration: underline; }
+
+  /* SVG icons */
+  .ico { width: 14px; height: 14px; flex-shrink: 0; }
+  .ico-lg { width: 16px; height: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <h1>Blob → Image</h1>
+    <p>
+      Turn raw image bytes — or a base64 / hex / <span class="kbd">data:image/…</span> dump — back into a viewable, downloadable image.
+      Runs entirely in your browser. Nothing is uploaded.
+    </p>
+  </header>
+
+  <div class="grid2">
+    <!-- Left column -->
+    <div class="col">
+      <!-- 1. Upload / paste -->
+      <div class="card">
+        <h2>
+          <svg class="ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          1. Choose a blob
+        </h2>
+        <p class="hint">
+          Drop or pick any file. The tool sniffs image formats (PNG, JPEG, GIF, WebP, BMP, TIFF, ICO, HEIC, AVIF, SVG) from magic bytes,
+          decodes base64 / hex / <span class="kbd">data:image/…</span> dumps automatically, and checks whether the bytes look encrypted.
+        </p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <label class="btn btn-secondary" id="pick-label">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <span id="pick-label-text">Upload file</span>
+            <input id="file-input" type="file" style="display:none" />
+          </label>
+          <button class="btn btn-secondary" id="clear-btn" hidden>Clear</button>
+        </div>
+
+        <div class="row-divider">
+          <div class="section-title">Or paste the blob content</div>
+          <p class="hint">
+            Hex bytes, base64, or a <span class="kbd">data:image/…;base64,…</span> URL — whitespace and line breaks are fine.
+          </p>
+          <textarea id="paste-input" rows="5" placeholder="e.g.&#10;89 50 4E 47 0D 0A 1A 0A …&#10;or&#10;iVBORw0KGgoAAAANSUhEUgAA…&#10;or&#10;data:image/png;base64,iVBORw0K…"></textarea>
+          <button class="btn btn-primary" id="paste-btn" style="margin-top:8px" disabled>
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 8.5 22 9 17 14 18.5 21 12 17.5 5.5 21 7 14 2 9 9 8.5"/></svg>
+            Convert pasted content
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. Details -->
+      <div class="card" id="details-card" hidden>
+        <h2>2. File &amp; blob details</h2>
+        <div id="details-rows"></div>
+
+        <div class="row-divider">
+          <div class="section-title">First 32 bytes (hex)
+            <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">The very first 32 bytes shown as hex. Most file types start with a unique "magic number" here that identifies them — like a fingerprint at the start of the file.</span></span>
+          </div>
+          <pre class="hex" id="hex-dump"></pre>
+        </div>
+
+        <div class="row-divider" id="sha-block" hidden>
+          <div class="section-title">
+            SHA-256 of decoded bytes
+            <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">A unique digital fingerprint of the bytes. Identical content always produces the same SHA-256; even changing one byte produces a completely different one.</span></span>
+          </div>
+          <pre class="hex" id="sha-dump"></pre>
+        </div>
+      </div>
+
+      <!-- 3. Detection -->
+      <div class="card" id="detection-card" hidden>
+        <h2>3. Detection
+          <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">What we figured out about the blob: what kind of file it is, and (if applicable) what text encoding it was wrapped in.</span></span>
+        </h2>
+        <div id="decoding-alert"></div>
+        <div id="detection-rows"></div>
+        <div id="detection-extra"></div>
+      </div>
+
+      <!-- 4. Encryption -->
+      <div class="card" id="enc-card" hidden>
+        <h2>
+          <svg class="ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          4. Encryption check
+          <span class="help"><span class="dot" tabindex="0">?</span><span class="tip">Checks the bytes against known encrypted-file signatures (OpenSSL, PGP, AES Crypt, encrypted PDF/ZIP, etc.) AND measures how random they look. Encrypted and well-compressed data both look near-random — this section explains how we tell.</span></span>
+        </h2>
+        <div id="enc-head" style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;"></div>
+        <p id="enc-reason" class="hint" style="margin-bottom:12px;"></p>
+        <div class="entropy-wrap">
+          <div class="entropy-head"><span>Entropy</span><span id="enc-entropy-label">0.00 / 8.00</span></div>
+          <div class="entropy-bar"><div class="entropy-fill" id="enc-entropy-fill" style="width:0%; background:#10b981"></div></div>
+        </div>
+        <div id="enc-rows"></div>
+        <p class="stat-foot">Entropy near 8 = random / encrypted / compressed. χ²/N near 1 = uniform byte distribution; higher = structured data.</p>
+      </div>
+
+      <!-- 5. Downloads -->
+      <div class="card" id="dl-card" hidden>
+        <h2>5. Download</h2>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-secondary" id="dl-original">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span id="dl-original-label">Original</span>
+          </button>
+          <button class="btn btn-primary" id="dl-png" disabled>
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Save as PNG
+          </button>
+          <button class="btn btn-primary" id="dl-jpeg" disabled>
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Save as JPEG
+          </button>
+        </div>
+        <p class="stat-foot" id="dl-foot"></p>
+      </div>
+    </div>
+
+    <!-- Right column — multi-output -->
+    <div class="col">
+      <!-- Image -->
+      <div class="card">
+        <h2>
+          <svg class="ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><polyline points="21 15 16 10 5 21"/></svg>
+          Image
+        </h2>
+        <div id="image-panel"><div class="preview-box">Upload or paste a blob first.</div></div>
+      </div>
+
+      <!-- Text -->
+      <div class="card">
+        <h2>
+          <svg class="ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Text
+        </h2>
+        <div id="text-panel" style="color: var(--slate-400); font-size: 13px;">Upload or paste a blob first.</div>
+      </div>
+
+      <!-- Other -->
+      <div class="card" id="other-card" hidden>
+        <h2 id="other-title">
+          <svg class="ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          Other
+        </h2>
+        <p class="hint" id="other-note"></p>
+        <pre class="pre" id="other-pre"></pre>
+      </div>
+    </div>
+  </div>
+
+  <footer class="page">
+    <span>Blob → Image · runs entirely in your browser · no server, no uploads</span>
+    <span><a href="https://github.com/" target="_blank" rel="noreferrer">Source</a></span>
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+/* ─────────────────────────── Helpers ─────────────────────────── */
+
+const UNKNOWN = { mime: "application/octet-stream", ext: "bin", label: "Unknown" };
+
+function detectFormat(b) {
+  if (b.length >= 4 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) {
+    return { mime: "image/png", ext: "png", label: "PNG" };
+  }
+  if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) {
+    return { mime: "image/jpeg", ext: "jpg", label: "JPEG" };
+  }
+  if (b.length >= 6 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) {
+    return { mime: "image/gif", ext: "gif", label: "GIF" };
+  }
+  if (b.length >= 12 &&
+      b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
+      b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) {
+    return { mime: "image/webp", ext: "webp", label: "WebP" };
+  }
+  if (b.length >= 2 && b[0] === 0x42 && b[1] === 0x4d) {
+    return { mime: "image/bmp", ext: "bmp", label: "BMP" };
+  }
+  if (b.length >= 4 &&
+      ((b[0] === 0x49 && b[1] === 0x49 && b[2] === 0x2a && b[3] === 0x00) ||
+       (b[0] === 0x4d && b[1] === 0x4d && b[2] === 0x00 && b[3] === 0x2a))) {
+    return { mime: "image/tiff", ext: "tif", label: "TIFF" };
+  }
+  if (b.length >= 4 && b[0] === 0x00 && b[1] === 0x00 && b[2] === 0x01 && b[3] === 0x00) {
+    return { mime: "image/x-icon", ext: "ico", label: "ICO" };
+  }
+  if (b.length >= 12) {
+    const ftyp = String.fromCharCode(b[4], b[5], b[6], b[7]);
+    if (ftyp === "ftyp") {
+      const brand = String.fromCharCode(b[8], b[9], b[10], b[11]);
+      if (["heic", "heix", "heim", "heis", "mif1", "msf1", "hevc", "hevx"].includes(brand)) {
+        return { mime: "image/heic", ext: "heic", label: "HEIC (" + brand + ")" };
+      }
+      if (brand === "avif" || brand === "avis") {
+        return { mime: "image/avif", ext: "avif", label: "AVIF (" + brand + ")" };
+      }
+      return { mime: "video/mp4", ext: "mp4", label: "ISO BMFF (" + brand + ")" };
+    }
+  }
+  const head = new TextDecoder("utf-8", { fatal: false }).decode(b.slice(0, 300)).trim();
+  if (head.startsWith("<?xml") || head.toLowerCase().startsWith("<svg")) {
+    return { mime: "image/svg+xml", ext: "svg", label: "SVG" };
+  }
+  return UNKNOWN;
+}
+
+function base64ToBytes(b64) {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function hexToBytes(hex) {
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return out;
+}
+
+function decodeAndDetect(bytes) {
+  const orig = detectFormat(bytes);
+  if (orig.label !== "Unknown") return { decoding: "binary", bytes: bytes, format: orig };
+
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  const trimmed = text.trim();
+
+  // data: URL
+  if (trimmed.startsWith("data:")) {
+    const comma = trimmed.indexOf(",");
+    if (comma > 0) {
+      const meta = trimmed.slice(0, comma);
+      const payload = trimmed.slice(comma + 1).replace(/\s+/g, "");
+      try {
+        const decoded = meta.includes("base64")
+          ? base64ToBytes(payload)
+          : new TextEncoder().encode(decodeURIComponent(payload));
+        const fmt = detectFormat(decoded);
+        if (fmt.label !== "Unknown") return { decoding: "dataurl", bytes: decoded, format: fmt };
+      } catch (e) { /* ignore */ }
+    }
+  }
+  // hex
+  const hex = trimmed.replace(/[\s,;]+/g, "");
+  if (hex.length >= 8 && hex.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(hex)) {
+    try {
+      const decoded = hexToBytes(hex);
+      const fmt = detectFormat(decoded);
+      if (fmt.label !== "Unknown") return { decoding: "hex", bytes: decoded, format: fmt };
+    } catch (e) { /* ignore */ }
+  }
+  // base64
+  const b64 = trimmed.replace(/\s+/g, "");
+  if (b64.length >= 16 && /^[A-Za-z0-9+/_\-]+=*$/.test(b64)) {
+    try {
+      const std = b64.replace(/-/g, "+").replace(/_/g, "/").replace(/=+$/g, "");
+      const padded = std + "===".slice(0, (4 - (std.length % 4)) % 4);
+      const decoded = base64ToBytes(padded);
+      const fmt = detectFormat(decoded);
+      if (fmt.label !== "Unknown") return { decoding: "base64", bytes: decoded, format: fmt };
+    } catch (e) { /* ignore */ }
+  }
+  return { decoding: "binary", bytes: bytes, format: orig };
+}
+
+function fmtBytes(n) {
+  if (n < 1024) return n + " B";
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+  return (n / 1024 / 1024).toFixed(2) + " MB";
+}
+function hexDump(b, n) {
+  if (n === undefined) n = 32;
+  const arr = Array.from(b.slice(0, n));
+  return arr.map((x) => x.toString(16).padStart(2, "0")).join(" ");
+}
+async function sha256Hex(b) {
+  const buf = await crypto.subtle.digest("SHA-256", b);
+  return Array.from(new Uint8Array(buf)).map((x) => x.toString(16).padStart(2, "0")).join("");
+}
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function baseName(name) {
+  return name.replace(/\.[^.]+$/, "") || "converted";
+}
+
+/* ─────────────────── Text + "other" payloads ──────────────────── */
+
+function renderAsText(b) {
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(b);
+  let printable = 0;
+  const total = text.length;
+  for (let i = 0; i < total; i++) {
+    const c = text.charCodeAt(i);
+    if (c >= 32 && c < 127) printable++;
+    else if (c === 9 || c === 10 || c === 13) printable++;
+    else if (c >= 0xA0 && c < 0xFFFD) printable++;
+  }
+  const ratio = total > 0 ? printable / total : 0;
+  return {
+    ok: ratio > 0.85 && total > 0,
+    preview: text.slice(0, 4000),
+    charCount: total,
+    lineCount: text.split("\n").length,
+    ratio: ratio,
+  };
+}
+
+function detectOther(text) {
+  const trimmed = text.trim();
+  if (!trimmed) return { kind: null };
+
+  if (trimmed.startsWith("-----BEGIN ")) {
+    const m = /^-----BEGIN ([^-]+)-----/.exec(trimmed);
+    const what = m ? m[1] : "data block";
+    return { kind: "pem", label: "PEM", note: what + " (PEM-encoded).", pretty: trimmed.slice(0, 4000) };
+  }
+  if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const pretty = JSON.stringify(parsed, null, 2);
+      const kindLabel = Array.isArray(parsed) ? "JSON array (" + parsed.length + " items)" : "JSON object";
+      return { kind: "json", label: "JSON", note: kindLabel, pretty: pretty.slice(0, 6000) };
+    } catch (e) { /* not JSON */ }
+  }
+  if (trimmed.startsWith("<?xml") || /^<!DOCTYPE\s+html/i.test(trimmed) || /^<[a-zA-Z][\s\S]*<\/[a-zA-Z]+>/.test(trimmed)) {
+    if (typeof DOMParser !== "undefined") {
+      const isHtml = /^<!DOCTYPE\s+html/i.test(trimmed) || /^<html[\s>]/i.test(trimmed);
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(trimmed, isHtml ? "text/html" : "text/xml");
+        if (!doc.querySelector("parsererror")) {
+          const root = doc.documentElement && doc.documentElement.tagName ? doc.documentElement.tagName : "";
+          return {
+            kind: isHtml ? "html" : "xml",
+            label: isHtml ? "HTML" : "XML",
+            note: root ? "Root: <" + root.toLowerCase() + ">" : undefined,
+            pretty: trimmed.slice(0, 6000),
+          };
+        }
+      } catch (e) { /* ignore */ }
+    }
+  }
+  const lines = trimmed.split(/\r?\n/).filter((l) => l.trim()).slice(0, 6);
+  if (lines.length >= 2) {
+    const csvSep = (lines[0].match(/,/g) || []).length;
+    const tsvSep = (lines[0].match(/\t/g) || []).length;
+    if (csvSep >= 1 && lines.every((l) => (l.match(/,/g) || []).length === csvSep)) {
+      return { kind: "csv", label: "CSV", note: (csvSep + 1) + " columns", pretty: lines.join("\n") };
+    }
+    if (tsvSep >= 1 && lines.every((l) => (l.match(/\t/g) || []).length === tsvSep)) {
+      return { kind: "tsv", label: "TSV", note: (tsvSep + 1) + " columns", pretty: lines.join("\n") };
+    }
+  }
+  if (/^https?:\/\//.test(trimmed)) {
+    const ls = trimmed.split(/\r?\n/).filter((l) => l.trim());
+    if (ls.length >= 1 && ls.every((l) => /^https?:\/\//.test(l.trim()))) {
+      return { kind: "url-list", label: "URLs", note: ls.length + " URL(s)", pretty: ls.slice(0, 50).join("\n") };
+    }
+  }
+  return { kind: null };
+}
+
+/* ───────────────────── Encryption detection ───────────────────── */
+
+function shannonEntropy(b) {
+  if (b.length === 0) return 0;
+  const counts = new Array(256).fill(0);
+  for (let i = 0; i < b.length; i++) counts[b[i]]++;
+  const n = b.length;
+  let h = 0;
+  for (let i = 0; i < 256; i++) {
+    const c = counts[i];
+    if (!c) continue;
+    const p = c / n;
+    h -= p * Math.log2(p);
+  }
+  return h;
+}
+function chiSquareNormalised(b) {
+  if (b.length === 0) return 0;
+  const counts = new Array(256).fill(0);
+  for (let i = 0; i < b.length; i++) counts[b[i]]++;
+  const expected = b.length / 256;
+  let chi = 0;
+  for (let i = 0; i < 256; i++) {
+    const d = counts[i] - expected;
+    chi += (d * d) / expected;
+  }
+  return chi / b.length;
+}
+
+function detectKnownEncryption(b) {
+  // OpenSSL `enc` "Salted__"
+  if (b.length >= 8 &&
+      b[0] === 0x53 && b[1] === 0x61 && b[2] === 0x6c && b[3] === 0x74 &&
+      b[4] === 0x65 && b[5] === 0x64 && b[6] === 0x5f && b[7] === 0x5f) {
+    return { name: "OpenSSL `enc` (AES-CBC + PBKDF2)", reason: "Starts with the `Salted__` prefix written by `openssl enc -aes-256-cbc -pbkdf2`." };
+  }
+  // AES Crypt
+  if (b.length >= 4 && b[0] === 0x41 && b[1] === 0x45 && b[2] === 0x53 && (b[3] === 0x01 || b[3] === 0x02)) {
+    return { name: "AES Crypt v" + b[3], reason: "Magic bytes `AES\\x0" + b[3] + "` — AES Crypt container format." };
+  }
+  // AxCrypt 2.x
+  if (b.length >= 16 &&
+      b[0] === 0xC0 && b[1] === 0xB9 && b[2] === 0x07 && b[3] === 0x2E &&
+      b[4] === 0x4F && b[5] === 0x93 && b[6] === 0xF1 && b[7] === 0x46) {
+    return { name: "AxCrypt 2.x", reason: "Starts with the AxCrypt 2.x file-format magic GUID." };
+  }
+  // age binary
+  const head64 = new TextDecoder("utf-8", { fatal: false }).decode(b.slice(0, 64));
+  if (head64.startsWith("age-encryption.org/v1")) {
+    return { name: "age (X25519 + ChaCha20-Poly1305)", reason: "Header line `age-encryption.org/v1` — `age` binary format." };
+  }
+  if (head64.startsWith("-----BEGIN AGE ENCRYPTED FILE-----")) {
+    return { name: "age (armored)", reason: "Begins with the age ASCII-armor banner." };
+  }
+  // PGP armor
+  if (head64.startsWith("-----BEGIN PGP MESSAGE-----")) {
+    return { name: "PGP / OpenPGP (armored)", reason: "Starts with the `-----BEGIN PGP MESSAGE-----` armor." };
+  }
+  if (head64.startsWith("-----BEGIN PGP PRIVATE KEY BLOCK-----")) {
+    return { name: "PGP private key (usually passphrase-protected)", reason: "ASCII-armored PGP secret key block — typically encrypted with a passphrase." };
+  }
+  if (head64.startsWith("-----BEGIN ENCRYPTED PRIVATE KEY-----")) {
+    return { name: "PKCS#8 encrypted private key", reason: "PEM-armored PKCS#8 EncryptedPrivateKeyInfo." };
+  }
+  if (head64.startsWith("-----BEGIN RSA PRIVATE KEY-----")) {
+    const sniff = new TextDecoder("utf-8", { fatal: false }).decode(b.slice(0, 512));
+    if (sniff.indexOf("Proc-Type: 4,ENCRYPTED") !== -1) {
+      return { name: "OpenSSL encrypted RSA PRIVATE KEY", reason: "PEM with `Proc-Type: 4,ENCRYPTED` header." };
+    }
+  }
+  // OpenPGP binary
+  if (b.length >= 1) {
+    const t = b[0];
+    if ((t & 0xC0) === 0x80) {
+      const tag = (t >> 2) & 0x0F;
+      if (tag === 1 || tag === 3 || tag === 9 || tag === 18) {
+        const name = tag === 1 ? "PKESK" : tag === 3 ? "SKESK" : tag === 9 ? "SED" : "SEIPD";
+        return { name: "PGP / OpenPGP (binary)", reason: "First byte is an OpenPGP packet header for " + name + " (tag " + tag + ")." };
+      }
+    }
+    if ((t & 0xC0) === 0xC0) {
+      const tag = t & 0x3F;
+      if (tag === 1 || tag === 3 || tag === 9 || tag === 18) {
+        const name = tag === 1 ? "PKESK" : tag === 3 ? "SKESK" : tag === 9 ? "SED" : "SEIPD";
+        return { name: "PGP / OpenPGP (binary, new packet format)", reason: "First byte is an OpenPGP new-format packet header for " + name + " (tag " + tag + ")." };
+      }
+    }
+  }
+  // ZIP encrypted
+  if (b.length >= 8 && b[0] === 0x50 && b[1] === 0x4B && b[2] === 0x03 && b[3] === 0x04) {
+    const flag = b[6] | (b[7] << 8);
+    if (flag & 0x01) {
+      const aes = (flag & 0x40) ? " (likely AES — WinZip/AES-strong)" : " (classic ZipCrypto unless flagged AES)";
+      return { name: "ZIP archive — encrypted entries" + aes, reason: "Local-file-header general-purpose bit 0 is set." };
+    }
+  }
+  if (b.length >= 8 && b[0] === 0x52 && b[1] === 0x61 && b[2] === 0x72 && b[3] === 0x21 && b[4] === 0x1A && b[5] === 0x07) {
+    return { name: "RAR archive (may be encrypted)", reason: "RAR magic — header/contents may be encrypted; full check needs deeper parsing." };
+  }
+  if (b.length >= 6 && b[0] === 0x37 && b[1] === 0x7A && b[2] === 0xBC && b[3] === 0xAF && b[4] === 0x27 && b[5] === 0x1C) {
+    return { name: "7-Zip archive (may be encrypted)", reason: "7z magic — entries can be encrypted with AES-256; needs deeper parsing to confirm." };
+  }
+  if (b.length >= 5 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46 && b[4] === 0x2D) {
+    const text = new TextDecoder("utf-8", { fatal: false }).decode(b.slice(0, Math.min(b.length, 8192)));
+    if (/\/Encrypt\b/.test(text)) {
+      return { name: "Encrypted PDF", reason: "PDF trailer/xref references an `/Encrypt` dictionary (passworded PDF)." };
+    }
+  }
+  if (b.length >= 4 && b[0] === 0x03 && b[1] === 0xD9 && b[2] === 0xA2 && b[3] === 0x9A) {
+    return { name: "KeePass KDBX database", reason: "KDBX magic `03 D9 A2 9A` — password-protected database." };
+  }
+  if (b.length >= 11 && b[3] === 0x2D && b[4] === 0x46 && b[5] === 0x56 && b[6] === 0x45 &&
+      b[7] === 0x2D && b[8] === 0x46 && b[9] === 0x53 && b[10] === 0x2D) {
+    return { name: "BitLocker-encrypted volume", reason: "Volume header contains the `-FVE-FS-` signature." };
+  }
+  return null;
+}
+
+function analyzeEncryption(b, fmt) {
+  const entropy = shannonEntropy(b);
+  const uniformity = chiSquareNormalised(b);
+  const known = detectKnownEncryption(b);
+  if (known) return { status: "encrypted", name: known.name, reason: known.reason, entropy, uniformity };
+
+  if (fmt.label !== "Unknown") {
+    return { status: "not-encrypted",
+             reason: "Recognised as " + fmt.label + " from its magic bytes. Compressed image formats (PNG, JPEG, HEIC…) look high-entropy but the header is not encrypted.",
+             entropy, uniformity };
+  }
+  if (b.length >= 64 && entropy > 7.95) {
+    return { status: "suspected", name: "Unknown — looks random",
+             reason: "Entropy is essentially at the maximum and bytes are uniformly distributed — strongly consistent with encryption or already-compressed data.",
+             entropy, uniformity };
+  }
+  if (b.length >= 64 && entropy > 7.5) {
+    return { status: "suspected", name: "Possibly encrypted or compressed",
+             reason: "Entropy is high but not perfectly uniform — could be encrypted, compressed, or otherwise high-entropy binary.",
+             entropy, uniformity };
+  }
+  if (entropy < 4.5) {
+    return { status: "not-encrypted",
+             reason: "Entropy is low — looks like text or simple structured data, not encryption.",
+             entropy, uniformity };
+  }
+  return { status: "unclear",
+           reason: "Moderate entropy and no recognised magic bytes — can't conclusively decide.",
+           entropy, uniformity };
+}
+
+/* ─────────────────────────── UI ─────────────────────────── */
+
+const state = {
+  file: null,
+  orig: null,         // Uint8Array — bytes as read from disk / paste
+  decoded: null,      // { decoding, bytes, format }
+  sha: null,
+  enc: null,
+  blobUrl: null,
+  imgInfo: null,
+  imgError: null,
+};
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[c]);
+}
+
+function makeHelp(text) {
+  return '<span class="help"><span class="dot" tabindex="0">?</span><span class="tip">'
+       + escapeHtml(text) + '</span></span>';
+}
+
+function row(k, v, hint) {
+  const hintHtml = hint ? makeHelp(hint) : "";
+  return '<div class="row"><span class="k">' + escapeHtml(k) + hintHtml + '</span>'
+       + '<span class="v">' + v + '</span></div>';
+}
+
+function reset() {
+  if (state.blobUrl) { URL.revokeObjectURL(state.blobUrl); state.blobUrl = null; }
+  state.file = null; state.orig = null; state.decoded = null;
+  state.sha = null; state.enc = null; state.imgInfo = null; state.imgError = null;
+
+  document.getElementById("paste-input").value = "";
+  document.getElementById("paste-btn").disabled = true;
+  document.getElementById("clear-btn").hidden = true;
+  document.getElementById("pick-label-text").textContent = "Upload file";
+
+  ["details-card", "detection-card", "enc-card", "dl-card", "other-card"].forEach((id) => {
+    document.getElementById(id).hidden = true;
+  });
+
+  document.getElementById("image-panel").innerHTML = '<div class="preview-box">Upload or paste a blob first.</div>';
+  const tp = document.getElementById("text-panel");
+  tp.textContent = "Upload or paste a blob first.";
+  tp.style.color = "var(--slate-400)";
+}
+
+async function processFile(file) {
+  if (!file) return;
+  state.file = file;
+  document.getElementById("pick-label-text").textContent = "Replace file";
+  document.getElementById("clear-btn").hidden = false;
+
+  document.getElementById("image-panel").innerHTML =
+    '<div class="preview-box" style="color:var(--slate-500)">Reading bytes…</div>';
+
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  state.orig = bytes;
+  state.decoded = decodeAndDetect(bytes);
+  state.enc = analyzeEncryption(state.decoded.bytes, state.decoded.format);
+  state.sha = await sha256Hex(state.decoded.bytes);
+
+  if (state.blobUrl) URL.revokeObjectURL(state.blobUrl);
+  state.blobUrl = URL.createObjectURL(
+    new Blob([state.decoded.bytes], { type: state.decoded.format.mime || "application/octet-stream" })
+  );
+
+  renderAll();
+}
+
+function renderAll() {
+  const file = state.file;
+  const orig = state.orig;
+  const decoded = state.decoded;
+  const fmt = decoded ? decoded.format : UNKNOWN;
+  const isImage = fmt.mime.indexOf("image/") === 0;
+  const decodedSize = decoded ? decoded.bytes.length : 0;
+
+  // 2. Details
+  document.getElementById("details-card").hidden = false;
+  let html = "";
+  html += row("File name", escapeHtml(file.name),
+              "The filename of the file you uploaded (or 'pasted-blob.txt' if you used the paste box).");
+  html += row("File size", fmtBytes(file.size) + " · " + file.size.toLocaleString() + " bytes",
+              "Total amount of data in the blob. KB and MB are just friendlier ways to write the byte count.");
+  html += row("Declared MIME (browser)", file.type ? escapeHtml(file.type) : '<span style="color:var(--slate-400)">—</span>',
+              "The content-type the browser thinks this file is, based on its extension. Often missing or wrong for raw blobs — that's why we sniff the actual bytes below.");
+  html += row("Last modified", new Date(file.lastModified).toLocaleString(),
+              "When the file was last saved on disk, according to the operating system.");
+  document.getElementById("details-rows").innerHTML = html;
+  document.getElementById("hex-dump").textContent = hexDump(orig, 32) || "(empty)";
+  document.getElementById("sha-block").hidden = false;
+  document.getElementById("sha-dump").textContent = state.sha;
+
+  // 3. Detection
+  document.getElementById("detection-card").hidden = false;
+  const dec = document.getElementById("decoding-alert");
+  if (decoded.decoding !== "binary") {
+    dec.innerHTML =
+      '<div class="alert info">' +
+      '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' +
+      '<span>Text encoding detected: <b>' + escapeHtml(decoded.decoding) + '</b>' +
+      makeHelp("The blob wasn't raw bytes — it was text representing those bytes (base64, hex, or a data: URL). We converted it back to the real bytes before checking what kind of file it is.") +
+      '. Decoded to <b>' + fmtBytes(decodedSize) + '</b> of binary data' +
+      (decodedSize !== orig.length ? ' (was ' + fmtBytes(orig.length) + ')' : '') + '.</span></div>';
+  } else { dec.innerHTML = ""; }
+
+  let detHtml = "";
+  detHtml += row("Detected format", '<b>' + escapeHtml(fmt.label) + '</b>',
+                 "What kind of file we think this is, based on its magic bytes — not on the filename or what the browser claimed.");
+  detHtml += row("Detected MIME", '<span class="mono">' + escapeHtml(fmt.mime) + '</span>',
+                 "The official Internet content-type for the detected format.");
+  detHtml += row("Suggested extension", '<span class="mono">.' + escapeHtml(fmt.ext) + '</span>',
+                 "The filename extension usually used for this format.");
+  document.getElementById("detection-rows").innerHTML = detHtml;
+
+  const extra = document.getElementById("detection-extra");
+  if (fmt.label === "Unknown") {
+    extra.innerHTML =
+      '<div class="alert muted">' +
+      '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>' +
+      '<span>This blob doesn\'t match any image magic bytes I know about. It might be raw / encrypted / partially corrupted data.</span></div>';
+  } else { extra.innerHTML = ""; }
+
+  // 4. Encryption
+  const enc = state.enc;
+  document.getElementById("enc-card").hidden = false;
+  let headHtml = "";
+  if (enc.status === "encrypted") headHtml += '<span class="badge badge-red">🔒 encrypted</span>';
+  else if (enc.status === "suspected") headHtml += '<span class="badge badge-amber">? suspected</span>';
+  else if (enc.status === "not-encrypted") headHtml += '<span class="badge badge-green">✓ not encrypted</span>';
+  else headHtml += '<span class="badge badge-slate">? unclear</span>';
+  if (enc.name) headHtml += '<span style="font-weight:500; color:var(--slate-900); font-size:13px;">' + escapeHtml(enc.name) + '</span>';
+  document.getElementById("enc-head").innerHTML = headHtml;
+  document.getElementById("enc-reason").textContent = enc.reason;
+
+  const pct = Math.min(100, Math.max(0, (enc.entropy / 8) * 100));
+  const color = enc.entropy < 4 ? "#10b981" : enc.entropy < 7 ? "#fbbf24" : enc.entropy < 7.5 ? "#f97316" : "#ef4444";
+  document.getElementById("enc-entropy-fill").style.width = pct + "%";
+  document.getElementById("enc-entropy-fill").style.background = color;
+  document.getElementById("enc-entropy-label").textContent = enc.entropy.toFixed(2) + " / 8.00";
+
+  let encRows = "";
+  encRows += row("Shannon entropy", enc.entropy.toFixed(3) + " / 8.000 bits/byte",
+                 "How random the bytes look, from 0 to 8. 0 = the same byte over and over (boring), 8 = perfectly random.");
+  encRows += row("Byte uniformity (χ²/N)", enc.uniformity.toFixed(2),
+                 "A statistical test for randomness. If every possible byte value appears about equally often, this is near 1 (looks random).");
+  document.getElementById("enc-rows").innerHTML = encRows;
+
+  // 5. Download
+  document.getElementById("dl-card").hidden = false;
+  document.getElementById("dl-original-label").textContent = "Original (" + fmt.label + ")";
+  document.getElementById("dl-png").disabled = !isImage;
+  document.getElementById("dl-jpeg").disabled = !isImage;
+  document.getElementById("dl-foot").textContent =
+    isImage
+      ? "PNG / JPEG export waits for the browser to decode the image — give the preview a moment."
+      : "Only the original is downloadable for this blob — there's no image to re-encode.";
+
+  // Right column: Image
+  const imgPanel = document.getElementById("image-panel");
+  if (isImage) {
+    imgPanel.innerHTML =
+      '<div class="preview-image"><img id="preview-img" alt="' + escapeHtml(file.name) + '" /></div>';
+    const img = document.getElementById("preview-img");
+    img.onload = () => {
+      state.imgInfo = { w: img.naturalWidth, h: img.naturalHeight };
+      renderDetectionImageDims();
+    };
+    img.onerror = () => {
+      state.imgError = "Browser couldn't decode this format" +
+        (fmt.mime === "image/heic" ? " — HEIC needs Safari or recent macOS Chrome." : ".");
+      renderImageFailure();
+    };
+    img.src = state.blobUrl;
+  } else {
+    imgPanel.innerHTML =
+      '<div class="preview-box" style="aspect-ratio:auto; padding:18px; color:var(--slate-500); text-align:center;">' +
+      "Couldn't be decoded as image" +
+      (fmt.label === "Unknown" ? " — no image format detected." :
+        " — bytes are " + fmt.label.toLowerCase() + ", not a renderable image.") +
+      '</div>';
+  }
+
+  // Right column: Text + Other
+  const outs = (function() {
+    const text = renderAsText(decoded.bytes);
+    const other = text.ok ? detectOther(text.preview) : { kind: null };
+    return { text, other };
+  })();
+  const tp = document.getElementById("text-panel");
+  if (outs.text.ok) {
+    tp.style.color = "";
+    tp.innerHTML =
+      '<pre class="pre">' + escapeHtml(outs.text.preview) +
+      (outs.text.preview.length < outs.text.charCount ? "\n…" : "") + '</pre>' +
+      '<p class="stat-foot" style="color:var(--slate-500); margin-top:8px;">' +
+      outs.text.charCount.toLocaleString() + " characters · " +
+      outs.text.lineCount.toLocaleString() + " line(s) · " +
+      Math.round(outs.text.ratio * 100) + "% printable</p>";
+  } else {
+    tp.style.color = "var(--slate-500)";
+    tp.textContent = "Bytes don't look like readable text — only " +
+      Math.round(outs.text.ratio * 100) + "% of bytes are printable characters.";
+  }
+
+  const oc = document.getElementById("other-card");
+  if (outs.other.kind) {
+    oc.hidden = false;
+    document.getElementById("other-title").innerHTML =
+      '<svg class="ico-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>' +
+      ' Other: ' + escapeHtml(outs.other.label);
+    document.getElementById("other-note").textContent = outs.other.note || "";
+    document.getElementById("other-note").style.display = outs.other.note ? "" : "none";
+    document.getElementById("other-pre").textContent = outs.other.pretty || "";
+  } else {
+    oc.hidden = true;
+  }
+}
+
+function renderDetectionImageDims() {
+  if (!state.imgInfo || !state.decoded) return;
+  const fmt = state.decoded.format;
+  const isImage = fmt.mime.indexOf("image/") === 0;
+  let detHtml = "";
+  detHtml += row("Detected format", '<b>' + escapeHtml(fmt.label) + '</b>',
+                 "What kind of file we think this is, based on its magic bytes.");
+  detHtml += row("Detected MIME", '<span class="mono">' + escapeHtml(fmt.mime) + '</span>',
+                 "The official Internet content-type for the detected format.");
+  detHtml += row("Suggested extension", '<span class="mono">.' + escapeHtml(fmt.ext) + '</span>',
+                 "The filename extension usually used for this format.");
+  detHtml += row("Image dimensions", state.imgInfo.w + " × " + state.imgInfo.h + " px",
+                 "Width by height of the picture in pixels, once the browser decoded the image.");
+  detHtml += row("Megapixels", ((state.imgInfo.w * state.imgInfo.h) / 1e6).toFixed(2) + " MP",
+                 "Total pixel count — width × height ÷ 1,000,000.");
+  detHtml += row("Aspect ratio", (state.imgInfo.w / state.imgInfo.h).toFixed(3),
+                 "Width divided by height. 1.00 = square, 1.78 = widescreen (16:9), 0.56 = tall phone screen.");
+  document.getElementById("detection-rows").innerHTML = detHtml;
+}
+
+function renderImageFailure() {
+  const fmt = state.decoded.format;
+  document.getElementById("image-panel").innerHTML =
+    '<div class="preview-box" style="aspect-ratio:auto; padding:18px; color:var(--slate-500); text-align:center;">' +
+    "Couldn't be decoded as image — " + escapeHtml(state.imgError) +
+    '</div>';
+  const extra = document.getElementById("detection-extra");
+  extra.innerHTML =
+    '<div class="alert warn">' +
+    '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>' +
+    '<span>' + escapeHtml(state.imgError) + '</span></div>';
+}
+
+/* ─────────────────────────── Wire-up ─────────────────────────── */
+
+document.getElementById("file-input").addEventListener("change", (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (f) processFile(f);
+  e.target.value = ""; // allow re-picking same file
+});
+
+document.getElementById("paste-input").addEventListener("input", (e) => {
+  document.getElementById("paste-btn").disabled = !e.target.value.trim();
+});
+
+document.getElementById("paste-btn").addEventListener("click", async () => {
+  const text = document.getElementById("paste-input").value.trim();
+  if (!text) return;
+  const bytes = new TextEncoder().encode(text);
+  const synth = new File([bytes], "pasted-blob.txt", { type: "text/plain", lastModified: Date.now() });
+  await processFile(synth);
+});
+
+document.getElementById("clear-btn").addEventListener("click", reset);
+
+document.getElementById("dl-original").addEventListener("click", () => {
+  if (!state.decoded || !state.file) return;
+  const fmt = state.decoded.format;
+  const blob = new Blob([state.decoded.bytes], { type: fmt.mime || "application/octet-stream" });
+  downloadBlob(blob, baseName(state.file.name) + "." + fmt.ext);
+});
+
+async function convertAndDownload(format) {
+  if (!state.blobUrl || !state.file || !state.decoded) return;
+  const fmt = state.decoded.format;
+  const img = new Image();
+  img.src = state.blobUrl;
+  try {
+    await new Promise((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("decode failed"));
+    });
+  } catch (e) {
+    state.imgError = "Browser couldn't decode this format" +
+      (fmt.mime === "image/heic" ? " — HEIC needs Safari or recent macOS Chrome." : ".");
+    renderImageFailure();
+    return;
+  }
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  const ctx = c.getContext("2d");
+  if (format === "jpeg") {
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, c.width, c.height);
+  }
+  ctx.drawImage(img, 0, 0);
+  c.toBlob(
+    (blob) => { if (blob) downloadBlob(blob, baseName(state.file.name) + (format === "png" ? ".png" : ".jpg")); },
+    format === "png" ? "image/png" : "image/jpeg",
+    format === "jpeg" ? 0.92 : undefined,
+  );
+}
+
+document.getElementById("dl-png").addEventListener("click", () => convertAndDownload("png"));
+document.getElementById("dl-jpeg").addEventListener("click", () => convertAndDownload("jpeg"));
+
+/* Drag & drop on the whole window */
+window.addEventListener("dragover", (e) => { e.preventDefault(); });
+window.addEventListener("drop", (e) => {
+  e.preventDefault();
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) processFile(f);
+});
+</script>
+</body>
+</html>
